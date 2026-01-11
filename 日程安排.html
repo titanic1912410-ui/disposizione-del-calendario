@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3天学习计划 → Apple 日历（ICS）</title>
+  <style>
+    body{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif; margin: 20px; line-height: 1.35;}
+    h1{font-size: 20px; margin: 0 0 8px;}
+    .muted{color:#666; font-size: 13px;}
+    .grid{display:grid; grid-template-columns: 1fr; gap: 12px; max-width: 980px;}
+    @media(min-width: 900px){ .grid{grid-template-columns: 1.1fr 0.9fr;} }
+    .card{border:1px solid #ddd; border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04);}
+    label{display:block; font-size: 13px; color:#333; margin: 8px 0 4px;}
+    input, select, textarea, button{width:100%; padding: 10px; border-radius: 10px; border:1px solid #ccc; font-size: 14px;}
+    textarea{min-height: 80px;}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap: 10px;}
+    .row3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;}
+    button{cursor:pointer; border:1px solid #111; background:#111; color:#fff;}
+    button.secondary{background:#fff; color:#111;}
+    button.danger{background:#b00020; border-color:#b00020;}
+    table{width:100%; border-collapse: collapse; font-size: 14px;}
+    th, td{border-bottom:1px solid #eee; padding: 10px 6px; text-align:left; vertical-align: top;}
+    .pill{display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #ddd; font-size: 12px; color:#444;}
+    .planItem{margin: 8px 0; padding: 10px; border: 1px solid #eee; border-radius: 12px;}
+    .small{font-size: 12px; color:#666;}
+    .flex{display:flex; gap:10px; align-items:center; flex-wrap: wrap;}
+    a.linkbtn{display:inline-block; padding:10px 12px; border-radius: 10px; border:1px solid #111; text-decoration:none; color:#111;}
+    code{background:#f6f6f6; padding:2px 6px; border-radius: 6px;}
+  </style>
+</head>
+<body>
+  <h1>未来3天学习计划 → Apple 日历（ICS）</h1>
+  <div class="muted">
+    逻辑：你录入学习条目 → 系统用简化记忆曲线算“何时该复习” → 每次打开自动生成未来3天计划 → 一键导出 ICS 导入 Apple 日历。<br/>
+    提醒：网页无法绕过系统权限自动写入日历，但导入非常快（点一下）。
+  </div>
+
+  <div class="grid" style="margin-top:14px;">
+    <!-- Left: Plan -->
+    <div class="card">
+      <h2 style="margin:0 0 6px; font-size:16px;">① 今日起未来 3 天：建议复习计划</h2>
+      <div class="muted" id="planMeta"></div>
+      <div id="planList" style="margin-top:10px;"></div>
+
+      <div class="flex" style="margin-top:12px;">
+        <button id="btnGenerate">生成 ICS（未来3天）</button>
+        <a id="downloadLink" class="linkbtn" href="#" download="study_plan.ics" style="display:none;">下载 / 导入到 Apple 日历</a>
+        <button id="btnCopy" class="secondary" style="display:none; width:auto;">复制 ICS 文本</button>
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        iPhone：点“下载/导入”通常会弹出日历导入。Mac：下载后双击 <code>.ics</code> 即可导入。
+      </div>
+      <textarea id="icsPreview" style="margin-top:10px; display:none;" readonly></textarea>
+    </div>
+
+    <!-- Right: Settings + Items -->
+    <div class="card">
+      <h2 style="margin:0 0 6px; font-size:16px;">② 设置（时间段 / 时长 / 提醒）</h2>
+      <div class="row3">
+        <div>
+          <label>时区</label>
+          <select id="tz">
+            <option value="America/Los_Angeles">America/Los_Angeles</option>
+            <option value="Europe/Rome">Europe/Rome</option>
+            <option value="Asia/Shanghai">Asia/Shanghai</option>
+          </select>
+        </div>
+        <div>
+          <label>提醒（提前分钟）</label>
+          <input id="alarmMin" type="number" min="0" value="15" />
+        </div>
+        <div>
+          <label>每个复习事件时长（分钟）</label>
+          <input id="durationMin" type="number" min="5" value="25" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>每天开始时间</label>
+          <input id="dayStart" type="time" value="10:00" />
+        </div>
+        <div>
+          <label>每天结束时间</label>
+          <input id="dayEnd" type="time" value="20:00" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>每天最多安排（条）</label>
+          <input id="maxPerDay" type="number" min="1" value="8" />
+        </div>
+        <div>
+          <label>事件间隔（分钟）</label>
+          <input id="gapMin" type="number" min="0" value="5" />
+        </div>
+      </div>
+
+      <hr style="border:none; border-top:1px solid #eee; margin: 14px 0;" />
+
+      <h2 style="margin:0 0 6px; font-size:16px;">③ 学习条目（你的知识库）</h2>
+      <div class="muted">建议把条目写得“可行动”：例如“Il cinema - Stile 4：discorsi / 复习笔记结构”</div>
+
+      <label>新增条目名称</label>
+      <input id="newTitle" placeholder="例：Il cinema 第9章 Stile - 4. Stile, cultura, discorso" />
+
+      <div class="row">
+        <div>
+          <label>难度感受</label>
+          <select id="newDifficulty">
+            <option value="easy">简单</option>
+            <option value="normal" selected>普通</option>
+            <option value="hard">困难</option>
+          </select>
+        </div>
+        <div>
+          <label>第一次学习日期（可选）</label>
+          <input id="newStartDate" type="date" />
+        </div>
+      </div>
+
+      <div class="flex" style="margin-top:10px;">
+        <button id="btnAdd" style="width:auto;">添加</button>
+        <button id="btnSeed" class="secondary" style="width:auto;">快速示例（生成3条）</button>
+        <button id="btnReset" class="danger" style="width:auto;">清空所有数据</button>
+      </div>
+
+      <div style="margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>条目</th>
+              <th>下次复习</th>
+              <th>熟练度</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="itemsTable"></tbody>
+        </table>
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        “熟练度”来自你每次点【完成复习】后的反馈（简单/一般/困难）→ 系统会调整下一次间隔。
+      </div>
+    </div>
+  </div>
+
+<script>
+/**
+ * 数据结构（localStorage）
+ * items: [{
+ *   id, title,
+ *   ease: number (默认 2.3),
+ *   intervalDays: number (默认 0),
+ *   repetitions: number (默认 0),
+ *   dueDateISO: "YYYY-MM-DD",
+ *   difficulty: "easy|normal|hard",
+ *   createdAtISO
+ * }]
+ */
+
+const LS_KEY = "study_apple_calendar_v1";
+
+function todayISO(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function addDaysISO(iso, days){
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+function loadState(){
+  const raw = localStorage.getItem(LS_KEY);
+  if(!raw) return { items: [], settings: defaultSettings() };
+  try{
+    const obj = JSON.parse(raw);
+    return {
+      items: Array.isArray(obj.items) ? obj.items : [],
+      settings: obj.settings ? obj.settings : defaultSettings()
+    };
+  }catch(e){
+    return { items: [], settings: defaultSettings() };
+  }
+}
+function saveState(state){
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+
+function defaultSettings(){
+  return {
+    tz: "America/Los_Angeles",
+    alarmMin: 15,
+    durationMin: 25,
+    dayStart: "10:00",
+    dayEnd: "20:00",
+    maxPerDay: 8,
+    gapMin: 5
+  };
+}
+
+// 简化 SM-2：根据 quality(0-5) 调整 ease 与 interval
+function updateSM2(item, quality){
+  // quality: 0..5
+  let ease = item.ease ?? 2.3;
+  let reps = item.repetitions ?? 0;
+  let interval = item.intervalDays ?? 0;
+
+  // ease 更新
+  ease = ease + (0.1 - (5-quality)*(0.08 + (5-quality)*0.02));
+  ease = clamp(ease, 1.3, 2.8);
+
+  if(quality < 3){
+    reps = 0;
+    interval = 1; // 明天再来
+  }else{
+    reps += 1;
+    if(reps === 1) interval = 1;
+    else if(reps === 2) interval = 3;
+    else interval = Math.round(interval * ease);
+    interval = clamp(interval, 1, 60);
+  }
+
+  const due = addDaysISO(todayISO(), interval);
+
+  return { ...item, ease, repetitions: reps, intervalDays: interval, dueDateISO: due };
+}
+
+// 初始条目：根据“难度”设置初始 ease，第一次 due=今天或指定日期
+function createItem(title, difficulty, startDateISO){
+  const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
+  const baseEase = difficulty === "easy" ? 2.5 : (difficulty === "hard" ? 2.1 : 2.3);
+  const start = startDateISO || todayISO();
+  return {
+    id,
+    title: title.trim(),
+    difficulty,
+    ease: baseEase,
+    repetitions: 0,
+    intervalDays: 0,
+    dueDateISO: start,
+    createdAtISO: new Date().toISOString()
+  };
+}
+
+function isoRange3Days(){
+  const t = todayISO();
+  return [t, addDaysISO(t,1), addDaysISO(t,2)];
+}
+
+function timeToMinutes(t){ // "HH:MM"
+  const [h,m] = t.split(":").map(Number);
+  return h*60 + m;
+}
+function minutesToTime(min){
+  const h = String(Math.floor(min/60)).padStart(2,"0");
+  const m = String(min%60).padStart(2,"0");
+  return `${h}:${m}`;
+}
+
+// 生成未来3天“应该复习”的条目列表（按 dueDate 排序）
+function buildDuePlan(state){
+  const [d0, d1, d2] = isoRange3Days();
+  const horizon = new Set([d0,d1,d2]);
+
+  const dueItems = state.items
+    .filter(it => it.dueDateISO && horizon.has(it.dueDateISO))
+    .sort((a,b) => (a.dueDateISO.localeCompare(b.dueDateISO)) || (a.title.localeCompare(b.title)));
+
+  // 分天限制 maxPerDay
+  const maxPerDay = Number(state.settings.maxPerDay || 8);
+  const buckets = { [d0]: [], [d1]: [], [d2]: [] };
+  for(const it of dueItems){
+    if(buckets[it.dueDateISO].length < maxPerDay) buckets[it.dueDateISO].push(it);
+  }
+  return buckets;
+}
+
+// 为每天安排具体时间：从 dayStart 开始，每个事件 duration + gap
+function scheduleTimesForDay(dateISO, items, settings){
+  const startMin = timeToMinutes(settings.dayStart);
+  const endMin = timeToMinutes(settings.dayEnd);
+  const dur = Number(settings.durationMin || 25);
+  const gap = Number(settings.gapMin || 5);
+
+  let cursor = startMin;
+  const slots = [];
+  for(const it of items){
+    const eventStart = cursor;
+    const eventEnd = cursor + dur;
+    if(eventEnd > endMin) break;
+    slots.push({
+      dateISO,
+      startTime: minutesToTime(eventStart),
+      endTime: minutesToTime(eventEnd),
+      item: it
+    });
+    cursor = eventEnd + gap;
+  }
+  return slots;
+}
+
+// ICS helpers
+function icsEscape(s){
+  return String(s).replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+}
+function formatDT(dateISO, timeHHMM){ // returns "YYYYMMDDTHHMM00"
+  const y = dateISO.slice(0,4);
+  const mo = dateISO.slice(5,7);
+  const d = dateISO.slice(8,10);
+  const hh = timeHHMM.slice(0,2);
+  const mm = timeHHMM.slice(3,5);
+  return `${y}${mo}${d}T${hh}${mm}00`;
+}
+function buildICS(slots, settings){
+  const tz = settings.tz || "America/Los_Angeles";
+  const alarmMin = Number(settings.alarmMin || 0);
+
+  const nowStamp = new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");
+
+  let lines = [];
+  lines.push("BEGIN:VCALENDAR");
+  lines.push("VERSION:2.0");
+  lines.push("PRODID:-//Carlo Study Planner//ICS Export//ZH");
+  lines.push("CALSCALE:GREGORIAN");
+  lines.push("METHOD:PUBLISH");
+  lines.push(`X-WR-TIMEZONE:${tz}`);
+  lines.push(`X-WR-CALNAME:${icsEscape("学习计划（未来3天）")}`);
+
+  for(const s of slots){
+    const uid = `${s.item.id}-${s.dateISO}-${s.startTime}`.replace(/[^A-Za-z0-9\-]/g,"") + "@studyplanner";
+    const dtStart = formatDT(s.dateISO, s.startTime);
+    const dtEnd = formatDT(s.dateISO, s.endTime);
+
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${uid}`);
+    lines.push(`DTSTAMP:${nowStamp}`);
+    lines.push(`SUMMARY:${icsEscape("复习：" + s.item.title)}`);
+    lines.push(`DESCRIPTION:${icsEscape("建议：用 5 分钟回忆 → 10 分钟对照笔记 → 5 分钟复述/输出。完成后回到页面点“完成复习”更新记忆曲线。")}`);
+    lines.push(`DTSTART;TZID=${tz}:${dtStart}`);
+    lines.push(`DTEND;TZID=${tz}:${dtEnd}`);
+
+    if(alarmMin > 0){
+      lines.push("BEGIN:VALARM");
+      lines.push("ACTION:DISPLAY");
+      lines.push(`DESCRIPTION:${icsEscape("学习提醒：" + s.item.title)}`);
+      lines.push(`TRIGGER:-PT${alarmMin}M`);
+      lines.push("END:VALARM");
+    }
+
+    lines.push("END:VEVENT");
+  }
+
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+// UI render
+function renderAll(){
+  const state = loadState();
+
+  // load settings to inputs
+  document.getElementById("tz").value = state.settings.tz;
+  document.getElementById("alarmMin").value = state.settings.alarmMin;
+  document.getElementById("durationMin").value = state.settings.durationMin;
+  document.getElementById("dayStart").value = state.settings.dayStart;
+  document.getElementById("dayEnd").value = state.settings.dayEnd;
+  document.getElementById("maxPerDay").value = state.settings.maxPerDay;
+  document.getElementById("gapMin").value = state.settings.gapMin;
+
+  // plan
+  const buckets = buildDuePlan(state);
+  const [d0,d1,d2] = isoRange3Days();
+  const total = buckets[d0].length + buckets[d1].length + buckets[d2].length;
+
+  document.getElementById("planMeta").textContent =
+    `今日 ${d0} 起的 3 天内：共 ${total} 条待复习（按你的记忆曲线计算）。`;
+
+  const planList = document.getElementById("planList");
+  planList.innerHTML = "";
+
+  function dayBlock(dateISO, items){
+    const wrap = document.createElement("div");
+    wrap.className = "planItem";
+    const title = document.createElement("div");
+    title.innerHTML = `<strong>${dateISO}</strong> <span class="pill">待复习 ${items.length}</span>`;
+    wrap.appendChild(title);
+
+    if(items.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "small";
+      empty.style.marginTop = "6px";
+      empty.textContent = "这一天暂无复习任务（你可以添加条目或完成复习来触发下一次安排）。";
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    const ul = document.createElement("div");
+    ul.style.marginTop = "8px";
+    for(const it of items){
+      const row = document.createElement("div");
+      row.className = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.borderTop = "1px dashed #eee";
+      row.style.paddingTop = "8px";
+      row.innerHTML = `
+        <div style="flex:1; min-width: 260px;">
+          <div><strong>${escapeHtml(it.title)}</strong></div>
+          <div class="small">熟练度：${(it.ease ?? 2.3).toFixed(2)}｜间隔：${it.intervalDays ?? 0} 天｜重复：${it.repetitions ?? 0}</div>
+        </div>
+        <div class="flex" style="gap:6px;">
+          <button class="secondary" data-action="done-easy" data-id="${it.id}" style="width:auto;">完成(简单)</button>
+          <button class="secondary" data-action="done-normal" data-id="${it.id}" style="width:auto;">完成(一般)</button>
+          <button class="secondary" data-action="done-hard" data-id="${it.id}" style="width:auto;">完成(困难)</button>
+        </div>
+      `;
+      ul.appendChild(row);
+    }
+    wrap.appendChild(ul);
+    return wrap;
+  }
+
+  planList.appendChild(dayBlock(d0, buckets[d0]));
+  planList.appendChild(dayBlock(d1, buckets[d1]));
+  planList.appendChild(dayBlock(d2, buckets[d2]));
+
+  // items table
+  const tb = document.getElementById("itemsTable");
+  tb.innerHTML = "";
+  const sorted = [...state.items].sort((a,b)=> (a.dueDateISO||"").localeCompare(b.dueDateISO||"") || a.title.localeCompare(b.title));
+
+  for(const it of sorted){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(it.title)}<div class="small">${escapeHtml(it.difficulty || "normal")}</div></td>
+      <td>${escapeHtml(it.dueDateISO || "-")}</td>
+      <td>${(it.ease ?? 2.3).toFixed(2)}<div class="small">rep ${it.repetitions ?? 0} / ${it.intervalDays ?? 0}d</div></td>
+      <td>
+        <div class="flex" style="gap:6px;">
+          <button class="secondary" data-action="force-today" data-id="${it.id}" style="width:auto;">设为今天</button>
+          <button class="danger" data-action="delete" data-id="${it.id}" style="width:auto;">删除</button>
+        </div>
+      </td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  // hide previous generated links
+  document.getElementById("downloadLink").style.display = "none";
+  document.getElementById("btnCopy").style.display = "none";
+  document.getElementById("icsPreview").style.display = "none";
+  document.getElementById("icsPreview").value = "";
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// settings save on change
+function bindSettings(){
+  const ids = ["tz","alarmMin","durationMin","dayStart","dayEnd","maxPerDay","gapMin"];
+  for(const id of ids){
+    document.getElementById(id).addEventListener("change", ()=>{
+      const state = loadState();
+      state.settings = {
+        tz: document.getElementById("tz").value,
+        alarmMin: Number(document.getElementById("alarmMin").value || 0),
+        durationMin: Number(document.getElementById("durationMin").value || 25),
+        dayStart: document.getElementById("dayStart").value,
+        dayEnd: document.getElementById("dayEnd").value,
+        maxPerDay: Number(document.getElementById("maxPerDay").value || 8),
+        gapMin: Number(document.getElementById("gapMin").value || 5),
+      };
+      saveState(state);
+      renderAll();
+    });
+  }
+}
+
+function bindActions(){
+  // add item
+  document.getElementById("btnAdd").addEventListener("click", ()=>{
+    const title = document.getElementById("newTitle").value.trim();
+    if(!title){ alert("先输入条目名称"); return; }
+    const diff = document.getElementById("newDifficulty").value;
+    const start = document.getElementById("newStartDate").value || null;
+
+    const state = loadState();
+    state.items.push(createItem(title, diff, start));
+    saveState(state);
+
+    document.getElementById("newTitle").value = "";
+    document.getElementById("newStartDate").value = "";
+    renderAll();
+  });
+
+  // seed demo
+  document.getElementById("btnSeed").addEventListener("click", ()=>{
+    const state = loadState();
+    state.items.push(createItem("Il cinema - Stile 4：Stile, cultura, discorso", "hard", todayISO()));
+    state.items.push(createItem("英语：一般现在时 vs 一般过去时（输出造句）", "normal", todayISO()));
+    state.items.push(createItem("Twine：branch & bottleneck 结构复盘 + 变量设计", "normal", todayISO()));
+    saveState(state);
+    renderAll();
+  });
+
+  // reset
+  document.getElementById("btnReset").addEventListener("click", ()=>{
+    if(confirm("确定清空所有条目和设置？")){
+      localStorage.removeItem(LS_KEY);
+      renderAll();
+    }
+  });
+
+  // delegate buttons in plan/table
+  document.body.addEventListener("click", (e)=>{
+    const btn = e.target.closest("button");
+    if(!btn) return;
+    const action = btn.getAttribute("data-action");
+    const id = btn.getAttribute("data-id");
+    if(!action || !id) return;
+
+    const state = loadState();
+    const idx = state.items.findIndex(x=>x.id===id);
+    if(idx === -1) return;
+
+    if(action === "delete"){
+      state.items.splice(idx,1);
+      saveState(state);
+      renderAll();
+      return;
+    }
+
+    if(action === "force-today"){
+      state.items[idx].dueDateISO = todayISO();
+      saveState(state);
+      renderAll();
+      return;
+    }
+
+    // 完成复习：根据难度反馈映射到 quality
+    // easy -> 5, normal -> 4, hard -> 2 (hard 代表这次没掌握好，要更快再复习)
+    let quality = 4;
+    if(action === "done-easy") quality = 5;
+    if(action === "done-normal") quality = 4;
+    if(action === "done-hard") quality = 2;
+
+    state.items[idx] = updateSM2(state.items[idx], quality);
+    saveState(state);
+    renderAll();
+  });
+
+  // generate ics
+  document.getElementById("btnGenerate").addEventListener("click", ()=>{
+    const state = loadState();
+    const buckets = buildDuePlan(state);
+    const [d0,d1,d2] = isoRange3Days();
+
+    const settings = state.settings;
+    const slots = [
+      ...scheduleTimesForDay(d0, buckets[d0], settings),
+      ...scheduleTimesForDay(d1, buckets[d1], settings),
+      ...scheduleTimesForDay(d2, buckets[d2], settings),
+    ];
+
+    if(slots.length === 0){
+      alert("未来3天没有可生成的复习事件：你可以添加条目，或把某个条目设为今天。");
+      return;
+    }
+
+    const ics = buildICS(slots, settings);
+
+    // create downloadable blob
+    const blob = new Blob([ics], {type: "text/calendar;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+
+    const a = document.getElementById("downloadLink");
+    a.href = url;
+    a.style.display = "inline-block";
+    a.download = `study_plan_${d0}_to_${d2}.ics`;
+    a.textContent = "下载 / 导入到 Apple 日历";
+
+    const preview = document.getElementById("icsPreview");
+    preview.style.display = "block";
+    preview.value = ics;
+
+    const copyBtn = document.getElementById("btnCopy");
+    copyBtn.style.display = "inline-block";
+    copyBtn.onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(ics);
+        alert("已复制 ICS 文本");
+      }catch(err){
+        alert("复制失败：你的浏览器可能不允许剪贴板。你可以手动全选复制。");
+      }
+    };
+  });
+}
+
+(function init(){
+  bindSettings();
+  bindActions();
+  renderAll();
+})();
+</script>
+</body>
+</html>
